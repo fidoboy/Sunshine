@@ -1,0 +1,15 @@
+name: Build Windows x64
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows-x64:
+    uses: ./.github/workflows/ci-windows.yml
+    with:
+      amd64_only: true
+      publish_release: 'false'
+      release_commit: ${{ github.sha }}
+      release_version: 'ac3-dev'
