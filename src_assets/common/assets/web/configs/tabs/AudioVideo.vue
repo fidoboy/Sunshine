@@ -11,6 +11,7 @@ import Checkbox from "../../Checkbox.vue";
 const props = defineProps({
   platform: String,
   config: Object,
+  ac3Available: { type: Boolean, default: false },
 })
 
 const config = ref(props.config)
@@ -66,6 +67,16 @@ const config = ref(props.config)
         ></Checkbox>
       </template>
     </PlatformLayout>
+
+    <!-- Optional AC-3 output for clients that support passthrough -->
+    <div v-if="platform === 'windows' && ac3Available" class="mb-3">
+      <label for="audio_format" class="form-label">{{ $t('config.audio_format') }}</label>
+      <select id="audio_format" class="form-select" v-model="config.audio_format">
+        <option value="opus">Opus (default)</option>
+        <option value="ac3">AC-3 (Dolby Digital 5.1, 320 kbit/s)</option>
+      </select>
+      <div class="form-text">{{ $t('config.audio_format_desc') }}</div>
+    </div>
 
     <!-- Disable Audio -->
     <Checkbox class="mb-3"
