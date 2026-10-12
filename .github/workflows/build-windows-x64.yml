@@ -16,4 +16,4 @@ jobs:
       amd64_only: true
       publish_release: 'false'
       release_commit: ${{ github.sha }}
-      release_version: '2026.1012.1'
+      release_version: '26.10.12'
