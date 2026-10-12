@@ -3,8 +3,27 @@
  * @brief Definitions for audio capture and encoding.
  */
 // standard includes
+#include <algorithm>
 #include <array>
+#include <filesystem>
+#include <format>
+#include <mutex>
 #include <thread>
+
+// Optional runtime-loaded FFmpeg AC-3 backend. Headers are a build-time dependency only;
+// no FFmpeg import library is linked and no FFmpeg DLL is bundled with Sunshine.
+#if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
+  #ifndef NOMINMAX
+    #define NOMINMAX
+  #endif
+  #include <Windows.h>
+  #include <libavcodec/avcodec.h>
+  #include <libavutil/avutil.h>
+  #include <libavutil/channel_layout.h>
+  #include <libavutil/frame.h>
+  #include <libavutil/version.h>
+  #define SUNSHINE_HAS_OPTIONAL_AC3 1
+#endif
 
 // lib includes
 #include <opus/opus_multistream.h>
@@ -100,6 +119,274 @@ namespace audio {
     },
   }};
 
+#ifdef SUNSHINE_HAS_OPTIONAL_AC3
+  template<typename Function>
+  bool load_ffmpeg_symbol(HMODULE module, Function &function, const char *name) {
+    function = reinterpret_cast<Function>(GetProcAddress(module, name));
+    return function != nullptr;
+  }
+
+  /**
+   * @brief Runtime-loaded FFmpeg API used only by the optional AC-3 encoder.
+   *
+   * The runtime DLL major versions must match the headers used for this build. Keeping all
+   * calls behind function pointers means Sunshine still starts normally when the DLLs are absent.
+   */
+  class ffmpeg_ac3_api_t {
+  public:
+    ~ffmpeg_ac3_api_t() {
+      if (avcodec_module_) {
+        FreeLibrary(avcodec_module_);
+      }
+      if (avutil_module_) {
+        FreeLibrary(avutil_module_);
+      }
+    }
+
+    bool available() {
+      std::call_once(load_once_, [this]() {
+        load();
+      });
+      return ready_;
+    }
+
+    decltype(&avutil_version) util_version {};
+    decltype(&avcodec_version) codec_version {};
+    decltype(&av_channel_layout_from_mask) channel_layout_from_mask {};
+    decltype(&av_channel_layout_copy) channel_layout_copy {};
+    decltype(&avcodec_find_encoder) find_encoder {};
+    decltype(&avcodec_alloc_context3) alloc_context {};
+    decltype(&avcodec_open2) open_encoder {};
+    decltype(&avcodec_free_context) free_context {};
+    decltype(&avcodec_send_frame) send_frame {};
+    decltype(&avcodec_receive_packet) receive_packet {};
+    decltype(&av_frame_alloc) alloc_frame {};
+    decltype(&av_frame_free) free_frame {};
+    decltype(&av_frame_get_buffer) get_frame_buffer {};
+    decltype(&av_frame_make_writable) make_frame_writable {};
+    decltype(&av_packet_alloc) alloc_packet {};
+    decltype(&av_packet_free) free_packet {};
+    decltype(&av_packet_unref) unref_packet {};
+
+  private:
+    void clear_symbols() {
+      util_version = nullptr;
+      codec_version = nullptr;
+      channel_layout_from_mask = nullptr;
+      channel_layout_copy = nullptr;
+      find_encoder = nullptr;
+      alloc_context = nullptr;
+      open_encoder = nullptr;
+      free_context = nullptr;
+      send_frame = nullptr;
+      receive_packet = nullptr;
+      alloc_frame = nullptr;
+      free_frame = nullptr;
+      get_frame_buffer = nullptr;
+      make_frame_writable = nullptr;
+      alloc_packet = nullptr;
+      free_packet = nullptr;
+      unref_packet = nullptr;
+    }
+
+    bool load_directory(const std::filesystem::path &directory) {
+      const auto avutil_path = directory / std::format(L"avutil-{}.dll", LIBAVUTIL_VERSION_MAJOR);
+      const auto avcodec_path = directory / std::format(L"avcodec-{}.dll", LIBAVCODEC_VERSION_MAJOR);
+
+      auto avutil_module = LoadLibraryExW(avutil_path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+      if (!avutil_module) {
+        return false;
+      }
+
+      auto avcodec_module = LoadLibraryExW(avcodec_path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+      if (!avcodec_module) {
+        FreeLibrary(avutil_module);
+        return false;
+      }
+
+      const auto symbols_loaded =
+        load_ffmpeg_symbol(avutil_module, util_version, "avutil_version") &&
+        load_ffmpeg_symbol(avutil_module, channel_layout_from_mask, "av_channel_layout_from_mask") &&
+        load_ffmpeg_symbol(avutil_module, channel_layout_copy, "av_channel_layout_copy") &&
+        load_ffmpeg_symbol(avutil_module, alloc_frame, "av_frame_alloc") &&
+        load_ffmpeg_symbol(avutil_module, free_frame, "av_frame_free") &&
+        load_ffmpeg_symbol(avutil_module, get_frame_buffer, "av_frame_get_buffer") &&
+        load_ffmpeg_symbol(avutil_module, make_frame_writable, "av_frame_make_writable") &&
+        load_ffmpeg_symbol(avutil_module, alloc_packet, "av_packet_alloc") &&
+        load_ffmpeg_symbol(avutil_module, free_packet, "av_packet_free") &&
+        load_ffmpeg_symbol(avutil_module, unref_packet, "av_packet_unref") &&
+        load_ffmpeg_symbol(avcodec_module, codec_version, "avcodec_version") &&
+        load_ffmpeg_symbol(avcodec_module, find_encoder, "avcodec_find_encoder") &&
+        load_ffmpeg_symbol(avcodec_module, alloc_context, "avcodec_alloc_context3") &&
+        load_ffmpeg_symbol(avcodec_module, open_encoder, "avcodec_open2") &&
+        load_ffmpeg_symbol(avcodec_module, free_context, "avcodec_free_context") &&
+        load_ffmpeg_symbol(avcodec_module, send_frame, "avcodec_send_frame") &&
+        load_ffmpeg_symbol(avcodec_module, receive_packet, "avcodec_receive_packet");
+
+      const auto versions_match = symbols_loaded &&
+        (util_version() >> 16) == LIBAVUTIL_VERSION_MAJOR &&
+        (codec_version() >> 16) == LIBAVCODEC_VERSION_MAJOR &&
+        find_encoder(AV_CODEC_ID_AC3) != nullptr;
+
+      if (!versions_match) {
+        FreeLibrary(avcodec_module);
+        FreeLibrary(avutil_module);
+        clear_symbols();
+        return false;
+      }
+
+      avutil_module_ = avutil_module;
+      avcodec_module_ = avcodec_module;
+      return true;
+    }
+
+    void load() {
+      std::wstring executable_path(32768, L'\0');
+      const auto length = GetModuleFileNameW(nullptr, executable_path.data(), static_cast<DWORD>(executable_path.size()));
+      if (length == 0 || length >= executable_path.size()) {
+        return;
+      }
+      executable_path.resize(length);
+
+      const auto executable_directory = std::filesystem::path(executable_path).parent_path();
+      const std::array directories {
+        executable_directory,
+        executable_directory / L"ffmpeg",
+      };
+
+      for (const auto &directory : directories) {
+        if (load_directory(directory)) {
+          ready_ = true;
+          BOOST_LOG(info) << "Optional FFmpeg AC-3 encoder is available"sv;
+          return;
+        }
+      }
+
+      clear_symbols();
+      BOOST_LOG(debug) << "Optional FFmpeg AC-3 encoder not found; continuing with Opus"sv;
+    }
+
+    std::once_flag load_once_;
+    HMODULE avutil_module_ {nullptr};
+    HMODULE avcodec_module_ {nullptr};
+    bool ready_ {false};
+  };
+
+  ffmpeg_ac3_api_t &ffmpeg_ac3_api() {
+    static ffmpeg_ac3_api_t api;
+    return api;
+  }
+
+  /**
+   * @brief Encode one interleaved 5.1 float PCM frame as one AC-3 access unit.
+   */
+  class ac3_encoder_t {
+  public:
+    ~ac3_encoder_t() {
+      if (packet_) {
+        api_.free_packet(&packet_);
+      }
+      if (frame_) {
+        api_.free_frame(&frame_);
+      }
+      if (context_) {
+        api_.free_context(&context_);
+      }
+    }
+
+    bool initialize() {
+      if (!api_.available()) {
+        return false;
+      }
+
+      const auto *codec = api_.find_encoder(AV_CODEC_ID_AC3);
+      if (!codec) {
+        return false;
+      }
+
+      context_ = api_.alloc_context(codec);
+      if (!context_) {
+        return false;
+      }
+
+      context_->bit_rate = 320000;
+      context_->sample_rate = SAMPLE_RATE;
+      context_->sample_fmt = AV_SAMPLE_FMT_FLTP;
+      context_->time_base = AVRational {1, SAMPLE_RATE};
+      context_->thread_count = 1;
+
+      if (api_.channel_layout_from_mask(&context_->ch_layout, AV_CH_LAYOUT_5POINT1_BACK) < 0 ||
+          api_.open_encoder(context_, codec, nullptr) < 0) {
+        return false;
+      }
+
+      // AC-3 uses 1536 samples per frame, which is exactly 32 ms at 48 kHz.
+      if (context_->frame_size != 1536) {
+        return false;
+      }
+
+      frame_ = api_.alloc_frame();
+      if (!frame_) {
+        return false;
+      }
+
+      frame_->format = context_->sample_fmt;
+      frame_->sample_rate = context_->sample_rate;
+      frame_->nb_samples = context_->frame_size;
+      if (api_.channel_layout_copy(&frame_->ch_layout, &context_->ch_layout) < 0 ||
+          api_.get_frame_buffer(frame_, 0) < 0) {
+        return false;
+      }
+
+      packet_ = api_.alloc_packet();
+      return packet_ != nullptr;
+    }
+
+    int encode(const std::vector<float> &interleaved, buffer_t &output) {
+      constexpr int CHANNELS = 6;
+      if (!frame_ || interleaved.size() != static_cast<std::size_t>(frame_->nb_samples * CHANNELS)) {
+        return -1;
+      }
+
+      if (api_.make_frame_writable(frame_) < 0) {
+        return -1;
+      }
+
+      for (int channel = 0; channel < CHANNELS; ++channel) {
+        auto *destination = reinterpret_cast<float *>(frame_->extended_data[channel]);
+        for (int sample = 0; sample < frame_->nb_samples; ++sample) {
+          destination[sample] = interleaved[static_cast<std::size_t>(sample * CHANNELS + channel)];
+        }
+      }
+
+      frame_->pts = next_pts_;
+      next_pts_ += frame_->nb_samples;
+
+      if (api_.send_frame(context_, frame_) < 0 || api_.receive_packet(context_, packet_) < 0) {
+        api_.unref_packet(packet_);
+        return -1;
+      }
+
+      const auto packet_size = packet_->size;
+      if (packet_size <= 0 || static_cast<std::size_t>(packet_size) > output.size()) {
+        api_.unref_packet(packet_);
+        return -1;
+      }
+
+      std::copy_n(packet_->data, packet_size, std::begin(output));
+      api_.unref_packet(packet_);
+      return packet_size;
+    }
+
+  private:
+    ffmpeg_ac3_api_t &api_ {ffmpeg_ac3_api()};
+    AVCodecContext *context_ {nullptr};
+    AVFrame *frame_ {nullptr};
+    AVPacket *packet_ {nullptr};
+    std::int64_t next_pts_ {0};
+  };
+#endif
+
   /**
    * @brief Encode captured PCM samples into Opus packets on the audio worker thread.
    *
@@ -117,6 +404,36 @@ namespace audio {
     // Encoding takes place on this thread
     platf::set_thread_name("audio::encode");
     platf::adjust_thread_priority(platf::thread_priority_e::high);
+
+    if (config.use_ac3) {
+#ifdef SUNSHINE_HAS_OPTIONAL_AC3
+      ac3_encoder_t ac3;
+      if (!ac3.initialize()) {
+        BOOST_LOG(error) << "Couldn't initialize the optional FFmpeg AC-3 encoder"sv;
+        packets->stop();
+        return;
+      }
+
+      BOOST_LOG(info) << "AC-3 initialized: 48 kHz, 5.1 channels, 320 kbps"sv;
+      while (auto sample = samples->pop()) {
+        buffer_t packet {1400};
+        const auto bytes = ac3.encode(*sample, packet);
+        if (bytes < 0) {
+          BOOST_LOG(error) << "Couldn't encode AC-3 audio frame"sv;
+          packets->stop();
+          return;
+        }
+
+        packet.fake_resize(bytes);
+        packets->raise(channel_data, std::move(packet));
+      }
+      return;
+#else
+      BOOST_LOG(error) << "AC-3 was requested, but this build does not support its optional FFmpeg backend"sv;
+      packets->stop();
+      return;
+#endif
+    }
 
     opus_t opus {opus_multistream_encoder_create(
       stream.sampleRate,
@@ -277,6 +594,14 @@ namespace audio {
   audio_ctx_ref_t get_audio_ctx_ref() {
     static auto control_shared {safe::make_shared<audio_ctx_t>(start_audio_control, stop_audio_control)};
     return control_shared.ref();
+  }
+
+  bool ac3_available() {
+#ifdef SUNSHINE_HAS_OPTIONAL_AC3
+    return ffmpeg_ac3_api().available();
+#else
+    return false;
+#endif
   }
 
   bool is_audio_ctx_sink_available(const audio_ctx_t &ctx) {
