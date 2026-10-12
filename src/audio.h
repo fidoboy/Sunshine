@@ -72,11 +72,11 @@ namespace audio {
     int channels;  ///< Number of audio channels requested by the client.
     int mask;  ///< Speaker mask describing the requested channel layout.
 
-    bool use_ac3 {false};  ///< Encode audio as AC-3 instead of Opus for this streaming session.
-
     stream_params_t customStreamParams;  ///< Custom Opus layout used when CUSTOM_SURROUND_PARAMS is enabled.
 
     std::bitset<MAX_FLAGS> flags;  ///< Enabled audio feature flags.
+
+    bool use_ac3 {false};  ///< Encode audio as AC-3 instead of Opus for this streaming session.
   };
 
   /**
