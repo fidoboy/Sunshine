@@ -212,9 +212,9 @@ namespace audio {
         load_ffmpeg_symbol(avutil_module, free_frame, "av_frame_free") &&
         load_ffmpeg_symbol(avutil_module, get_frame_buffer, "av_frame_get_buffer") &&
         load_ffmpeg_symbol(avutil_module, make_frame_writable, "av_frame_make_writable") &&
-        load_ffmpeg_symbol(avutil_module, alloc_packet, "av_packet_alloc") &&
-        load_ffmpeg_symbol(avutil_module, free_packet, "av_packet_free") &&
-        load_ffmpeg_symbol(avutil_module, unref_packet, "av_packet_unref") &&
+        load_ffmpeg_symbol(avcodec_module, alloc_packet, "av_packet_alloc") &&
+        load_ffmpeg_symbol(avcodec_module, free_packet, "av_packet_free") &&
+        load_ffmpeg_symbol(avcodec_module, unref_packet, "av_packet_unref") &&
         load_ffmpeg_symbol(avcodec_module, codec_version, "avcodec_version") &&
         load_ffmpeg_symbol(avcodec_module, find_encoder, "avcodec_find_encoder") &&
         load_ffmpeg_symbol(avcodec_module, alloc_context, "avcodec_alloc_context3") &&
