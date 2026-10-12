@@ -22,6 +22,7 @@ extern "C" {
 #include <boost/bind.hpp>
 
 // local includes
+#include "audio.h"
 #include "config.h"
 #include "globals.h"
 #include "input.h"
@@ -1214,6 +1215,20 @@ namespace rtsp_stream {
       return;
     }
 
+    // AC-3 is a fixed 5.1 stream with one 1536-sample frame every 32 ms.
+    // Override the client-requested Opus packet duration/layout for AC-3 sessions.
+    config.audio.use_ac3 = config::audio.format == "ac3"sv && audio::ac3_available();
+    if (config::audio.format == "ac3"sv && !config.audio.use_ac3) {
+      BOOST_LOG(warning) << "AC-3 was selected, but compatible FFmpeg DLLs are unavailable; using Opus"sv;
+    }
+    if (config.audio.use_ac3) {
+      config.audio.channels = 6;
+      config.audio.packetDuration = 32;
+      config.audio.flags[audio::config_t::HIGH_QUALITY] = true;
+      config.audio.flags[audio::config_t::CUSTOM_SURROUND_PARAMS] = false;
+      BOOST_LOG(info) << "Using AC-3 audio: 5.1 channels, 48 kHz, 320 kbit/s"sv;
+    }
+
     // When using stereo audio, the audio quality is (strangely) indicated by whether the Host field
     // in the RTSP message matches a local interface's IP address. Fortunately, Moonlight always sends
     // 0.0.0.0 when it wants low quality, so it is easy to check without enumerating interfaces.
@@ -1268,7 +1283,7 @@ namespace rtsp_stream {
 
       // Adjust the bitrate to account for audio traffic bandwidth usage (capped at 20% reduction).
       // The bitrate per channel is 256 Kbps for high quality mode and 96 Kbps for normal quality.
-      auto audioBitrateAdjustment = (config.audio.flags[audio::config_t::HIGH_QUALITY] ? 256 : 96) * config.audio.channels;
+      auto audioBitrateAdjustment = config.audio.use_ac3 ? 320 : (config.audio.flags[audio::config_t::HIGH_QUALITY] ? 256 : 96) * config.audio.channels;
       configuredBitrateKbps -= std::min((std::int64_t) audioBitrateAdjustment, configuredBitrateKbps / 5);
 
       // Reduce it by another 500Kbps to account for A/V packet overhead and control data
