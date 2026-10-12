@@ -110,8 +110,6 @@ jobs:
             dependencies+=(
               "mingw-w64-${TOOLCHAIN}-MinHook"
               "mingw-w64-${TOOLCHAIN}-nsis"
-              # Headers only: Sunshine loads the user's FFmpeg DLLs dynamically at runtime.
-              "mingw-w64-${TOOLCHAIN}-ffmpeg"
             )
           fi
 
