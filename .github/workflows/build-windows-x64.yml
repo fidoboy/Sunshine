@@ -3,6 +3,9 @@ name: Build Windows x64
 permissions: {}
 
 on:
+  push:
+    branches:
+      - ac3-audio
   workflow_dispatch:
 
 jobs:
