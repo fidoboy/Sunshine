@@ -72,6 +72,8 @@ namespace audio {
     int channels;  ///< Number of audio channels requested by the client.
     int mask;  ///< Speaker mask describing the requested channel layout.
 
+    bool use_ac3 {false};  ///< Encode audio as AC-3 instead of Opus for this streaming session.
+
     stream_params_t customStreamParams;  ///< Custom Opus layout used when CUSTOM_SURROUND_PARAMS is enabled.
 
     std::bitset<MAX_FLAGS> flags;  ///< Enabled audio feature flags.
@@ -140,4 +142,10 @@ namespace audio {
    * @param ctx Native context object used by the operation or callback.
    */
   bool is_audio_ctx_sink_available(const audio_ctx_t &ctx);
+
+  /**
+   * @brief Check whether a compatible optional FFmpeg AC-3 encoder is available.
+   * @return True when the required FFmpeg DLLs and AC-3 encoder are available.
+   */
+  bool ac3_available();
 }  // namespace audio
