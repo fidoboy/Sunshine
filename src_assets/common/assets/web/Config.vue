@@ -102,6 +102,7 @@
         v-if="currentTab === 'av'"
         :config="config"
         :platform="platform"
+        :ac3-available="ac3Available"
       >
       </audio-video>
 
@@ -218,6 +219,7 @@
     data() {
       return {
         platform: "",
+        ac3Available: false,
         saved: false,
         restarted: false,
         config: null,
@@ -270,6 +272,8 @@
         .then((r) => {
           this.config = r;
           this.platform = this.config.platform;
+          this.ac3Available = r.ac3_available === true;
+          delete this.config.ac3_available;
 
           if (this.platform === "windows") {
             this.tabs = this.tabs.filter((el) => {
