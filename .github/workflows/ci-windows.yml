@@ -30,6 +30,10 @@ on:
       release_version:
         required: true
         type: string
+      amd64_only:
+        required: false
+        type: boolean
+        default: false
     secrets:
       # Azure Client ID (App Registration) for Artifact Signing
       AZURE_CLIENT_ID:
@@ -46,6 +50,7 @@ env:
 
 jobs:
   build_windows:
+    if: ${{ !inputs.amd64_only || matrix.name == 'Windows-AMD64' }}
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     defaults:
