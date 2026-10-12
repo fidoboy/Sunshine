@@ -482,7 +482,9 @@
     "wan_encryption_mode": "Modo de cifrado WAN",
     "wan_encryption_mode_1": "Activado para clientes compatibles (por defecto)",
     "wan_encryption_mode_2": "Requerido para todos los clientes",
-    "wan_encryption_mode_desc": "Esto determina cuándo se utilizará el cifrado al transmitir a través de Internet. El cifrado puede reducir el rendimiento de la transmisión, especialmente en hosts y clientes menos poderosos."
+    "wan_encryption_mode_desc": "Esto determina cuándo se utilizará el cifrado al transmitir a través de Internet. El cifrado puede reducir el rendimiento de la transmisión, especialmente en hosts y clientes menos poderosos.",
+    "audio_format": "Formato de audio del stream",
+    "audio_format_desc": "AC-3 solo está disponible cuando se encuentran DLL de FFmpeg compatibles junto a Sunshine o en su subdirectorio ffmpeg. Selecciónalo únicamente con un cliente compatible con passthrough AC-3. Opus sigue siendo la opción predeterminada."
   },
   "index": {
     "permissions_missing_title": "Sunshine necesita permisos",
