@@ -1263,6 +1263,10 @@ namespace rtsp_stream {
       }
       config.audio.flags[audio::config_t::CUSTOM_SURROUND_PARAMS] = valid;
     }
+    // AC-3 uses the standard 5.1 speaker order, not an Opus-specific custom mapping.
+    if (config.audio.use_ac3) {
+      config.audio.flags[audio::config_t::CUSTOM_SURROUND_PARAMS] = false;
+    }
     if (session.continuous_audio) {
       BOOST_LOG(info) << "Client requested continuous audio"sv;
       config.audio.flags[audio::config_t::CONTINUOUS_AUDIO] = true;
