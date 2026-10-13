@@ -69,13 +69,14 @@ const config = ref(props.config)
     </PlatformLayout>
 
     <!-- Optional AC-3 output for clients that support passthrough -->
-    <div v-if="platform === 'windows' && ac3Available" class="mb-3">
+    <div v-if="platform === 'windows'" class="mb-3">
       <label for="audio_format" class="form-label">{{ $t('config.audio_format') }}</label>
-      <select id="audio_format" class="form-select" v-model="config.audio_format">
+      <select id="audio_format" class="form-select" v-model="config.audio_format" :disabled="!ac3Available">
         <option value="opus">Opus (default)</option>
         <option value="ac3">AC-3 (Dolby Digital 5.1, 320 kbit/s)</option>
       </select>
-      <div class="form-text">{{ $t('config.audio_format_desc') }}</div>
+      <div v-if="ac3Available" class="form-text">{{ $t('config.audio_format_desc') }}</div>
+      <div v-else class="form-text">{{ $t('config.audio_format_unavailable_desc') }}</div>
     </div>
 
     <!-- Disable Audio -->

@@ -275,6 +275,11 @@
           this.ac3Available = r.ac3_available === true;
           delete this.config.ac3_available;
 
+          // Keep the effective setting on Opus when the optional AC-3 backend is unavailable.
+          if (this.platform === "windows" && !this.ac3Available) {
+            this.config.audio_format = "opus";
+          }
+
           if (this.platform === "windows") {
             this.tabs = this.tabs.filter((el) => {
               return el.id !== "vt" && el.id !== "vaapi" && el.id !== "vulkan";
