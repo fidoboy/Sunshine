@@ -75,7 +75,7 @@ const config = ref(props.config)
         <option value="opus">Opus (default)</option>
         <option value="ac3">AC-3 (Dolby Digital 5.1, 320 kbit/s)</option>
       </select>
-      <div v-if="ac3Available" class="form-text">{{ $t('config.audio_format_desc') }}</div>
+      <div v-if="ac3Available" class="form-text">{{ $t('config.audio_format_fallback_desc') }}</div>
       <div v-else class="form-text">{{ $t('config.audio_format_unavailable_desc') }}</div>
     </div>
 
