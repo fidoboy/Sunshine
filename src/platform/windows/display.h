@@ -235,34 +235,34 @@ namespace platf::dxgi {
     /**
      * @brief Update the cursor position and display geometry used for rendering.
      *
-     * @param topleft_x Cursor left edge in desktop coordinates.
-     * @param topleft_y Cursor top edge in desktop coordinates.
-     * @param display_width Captured display width in pixels.
-     * @param display_height Captured display height in pixels.
-     * @param display_rotation DXGI rotation applied to the captured display.
-     * @param visible Whether the cursor should be visible in the frame.
+     * @param new_topleft_x Cursor left edge in desktop coordinates.
+     * @param new_topleft_y Cursor top edge in desktop coordinates.
+     * @param new_display_width Captured display width in pixels.
+     * @param new_display_height Captured display height in pixels.
+     * @param new_display_rotation DXGI rotation applied to the captured display.
+     * @param new_visible Whether the cursor should be visible in the frame.
      */
-    void set_pos(LONG topleft_x, LONG topleft_y, LONG display_width, LONG display_height, DXGI_MODE_ROTATION display_rotation, bool visible) {
-      this->topleft_x = topleft_x;
-      this->topleft_y = topleft_y;
-      this->display_width = display_width;
-      this->display_height = display_height;
-      this->display_rotation = display_rotation;
-      this->visible = visible;
+    void set_pos(LONG new_topleft_x, LONG new_topleft_y, LONG new_display_width, LONG new_display_height, DXGI_MODE_ROTATION new_display_rotation, bool new_visible) {
+      this->topleft_x = new_topleft_x;
+      this->topleft_y = new_topleft_y;
+      this->display_width = new_display_width;
+      this->display_height = new_display_height;
+      this->display_rotation = new_display_rotation;
+      this->visible = new_visible;
       update_viewport();
     }
 
     /**
      * @brief Replace the cursor texture and update its render viewport.
      *
-     * @param texture_width Cursor texture width in pixels.
-     * @param texture_height Cursor texture height in pixels.
-     * @param texture D3D11 cursor texture to render.
+     * @param new_texture_width Cursor texture width in pixels.
+     * @param new_texture_height Cursor texture height in pixels.
+     * @param new_texture D3D11 cursor texture to render.
      */
-    void set_texture(LONG texture_width, LONG texture_height, texture2d_t &&texture) {
-      this->texture = std::move(texture);
-      this->texture_width = texture_width;
-      this->texture_height = texture_height;
+    void set_texture(LONG new_texture_width, LONG new_texture_height, texture2d_t &&new_texture) {
+      this->texture = std::move(new_texture);
+      this->texture_width = new_texture_width;
+      this->texture_height = new_texture_height;
       update_viewport();
     }
 
@@ -359,32 +359,36 @@ namespace platf::dxgi {
     /**
      * @brief Enumerates supported d3 DKMT SCHEDULINGPRIORITYCLASS options.
      */
-    typedef enum _D3DKMT_SCHEDULINGPRIORITYCLASS {
+    enum _D3DKMT_SCHEDULINGPRIORITYCLASS {
       D3DKMT_SCHEDULINGPRIORITYCLASS_IDLE,  ///< Idle priority class
       D3DKMT_SCHEDULINGPRIORITYCLASS_BELOW_NORMAL,  ///< Below normal priority class
       D3DKMT_SCHEDULINGPRIORITYCLASS_NORMAL,  ///< Normal priority class
       D3DKMT_SCHEDULINGPRIORITYCLASS_ABOVE_NORMAL,  ///< Above normal priority class
       D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH,  ///< High priority class
       D3DKMT_SCHEDULINGPRIORITYCLASS_REALTIME  ///< Realtime priority class
-    } D3DKMT_SCHEDULINGPRIORITYCLASS;  ///< Alias for D3 DKMT SCHEDULINGPRIORITYCLASS.
+    };
+
+    using D3DKMT_SCHEDULINGPRIORITYCLASS = _D3DKMT_SCHEDULINGPRIORITYCLASS;  ///< Process scheduling priority class passed to D3DKMT.
 
     /**
      * @brief Kernel-mode D3DKMT adapter handle.
      */
-    typedef UINT D3DKMT_HANDLE;
+    using D3DKMT_HANDLE = UINT;
 
     /**
      * @brief Win32 D3DKMT adapter-open request structure.
      */
-    typedef struct _D3DKMT_OPENADAPTERFROMLUID {
+    struct _D3DKMT_OPENADAPTERFROMLUID {
       LUID AdapterLuid;  ///< Adapter luid.
       D3DKMT_HANDLE hAdapter;  ///< D3DKMT adapter handle used for low-level display queries.
-    } D3DKMT_OPENADAPTERFROMLUID;  ///< Alias for D3 DKMT OPENADAPTERFROMLUID.
+    };
+
+    using D3DKMT_OPENADAPTERFROMLUID = _D3DKMT_OPENADAPTERFROMLUID;  ///< Adapter-open request passed to D3DKMT.
 
     /**
      * @brief Win32 D3DKMT WDDM 2.7 capability flags.
      */
-    typedef struct _D3DKMT_WDDM_2_7_CAPS {
+    struct _D3DKMT_WDDM_2_7_CAPS {
       union {
         struct
         {
@@ -397,43 +401,49 @@ namespace platf::dxgi {
 
         UINT Value;  ///< Packed representation of the WDDM 2.7 capability flags.
       };
-    } D3DKMT_WDDM_2_7_CAPS;  ///< Alias for D3 DKMT WDDM 2 7 CAPS.
+    };
+
+    using D3DKMT_WDDM_2_7_CAPS = _D3DKMT_WDDM_2_7_CAPS;  ///< WDDM 2.7 capability flags returned by D3DKMT.
 
     /**
      * @brief Win32 D3DKMT adapter information query.
      */
-    typedef struct _D3DKMT_QUERYADAPTERINFO {
+    struct _D3DKMT_QUERYADAPTERINFO {
       D3DKMT_HANDLE hAdapter;  ///< D3DKMT adapter handle used for low-level display queries.
       UINT Type;  ///< Type.
       VOID *pPrivateDriverData;  ///< P private driver data.
       UINT PrivateDriverDataSize;  ///< Private driver data size.
-    } D3DKMT_QUERYADAPTERINFO;  ///< Alias for D3 DKMT QUERYADAPTERINFO.
+    };
+
+    using D3DKMT_QUERYADAPTERINFO = _D3DKMT_QUERYADAPTERINFO;  ///< Adapter-information query passed to D3DKMT.
 
     const UINT KMTQAITYPE_WDDM_2_7_CAPS = 70;  ///< Protocol or platform constant for kmtqaitype wddm 2 7 caps.
 
     /**
      * @brief Win32 D3DKMT adapter-close request structure.
      */
-    typedef struct _D3DKMT_CLOSEADAPTER {
+    struct _D3DKMT_CLOSEADAPTER {
       D3DKMT_HANDLE hAdapter;  ///< D3DKMT adapter handle used for low-level display queries.
-    } D3DKMT_CLOSEADAPTER;  ///< Alias for D3 DKMT CLOSEADAPTER.
+    };
+
+    using D3DKMT_CLOSEADAPTER = _D3DKMT_CLOSEADAPTER;  ///< Adapter-close request passed to D3DKMT.
 
     /**
      * @brief Function pointer for setting D3DKMT process scheduling priority.
      */
-    typedef NTSTATUS(WINAPI *PD3DKMTSetProcessSchedulingPriorityClass)(HANDLE, D3DKMT_SCHEDULINGPRIORITYCLASS);
+    using PD3DKMTSetProcessSchedulingPriorityClass = NTSTATUS(WINAPI *)(HANDLE, D3DKMT_SCHEDULINGPRIORITYCLASS);
     /**
      * @brief Function pointer for opening a D3DKMT adapter by LUID.
      */
-    typedef NTSTATUS(WINAPI *PD3DKMTOpenAdapterFromLuid)(D3DKMT_OPENADAPTERFROMLUID *);
+    using PD3DKMTOpenAdapterFromLuid = NTSTATUS(WINAPI *)(D3DKMT_OPENADAPTERFROMLUID *);
     /**
      * @brief Function pointer for querying D3DKMT adapter information.
      */
-    typedef NTSTATUS(WINAPI *PD3DKMTQueryAdapterInfo)(D3DKMT_QUERYADAPTERINFO *);
+    using PD3DKMTQueryAdapterInfo = NTSTATUS(WINAPI *)(D3DKMT_QUERYADAPTERINFO *);
     /**
      * @brief Function pointer for closing a D3DKMT adapter handle.
      */
-    typedef NTSTATUS(WINAPI *PD3DKMTCloseAdapter)(D3DKMT_CLOSEADAPTER *);
+    using PD3DKMTCloseAdapter = NTSTATUS(WINAPI *)(D3DKMT_CLOSEADAPTER *);
 
     /**
      * @brief Report whether the active display mode is HDR.

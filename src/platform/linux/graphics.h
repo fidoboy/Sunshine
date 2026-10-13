@@ -358,11 +358,11 @@ namespace gbm {
   /**
    * @brief Function pointer used to destroy a GBM device.
    */
-  typedef void (*device_destroy_fn)(device *gbm);
+  using device_destroy_fn = void (*)(device *gbm);
   /**
    * @brief Function pointer used to create a GBM device from a file descriptor.
    */
-  typedef device *(*create_device_fn)(int fd);
+  using create_device_fn = device *(*)(int fd);
 
   extern device_destroy_fn device_destroy;
   extern create_device_fn create_device;
@@ -616,11 +616,11 @@ namespace egl {
      * @brief Reset the object to its initial empty state.
      */
     void reset() {
-      for (auto x = 0; x < 4; ++x) {
-        if (sd.fds[x] >= 0) {
-          close(sd.fds[x]);
+      for (auto fd_index = 0; fd_index < 4; ++fd_index) {
+        if (sd.fds[fd_index] >= 0) {
+          close(sd.fds[fd_index]);
 
-          sd.fds[x] = -1;
+          sd.fds[fd_index] = -1;
         }
       }
     }

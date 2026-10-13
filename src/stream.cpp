@@ -289,7 +289,7 @@ namespace stream {
   /**
    * @brief Packed encrypted control-channel envelope.
    */
-  typedef struct control_encrypted_t {
+  struct control_encrypted_t {
     std::uint16_t encryptedHeaderType;  ///< Always LE 0x0001.
     std::uint16_t length;  ///< Size of seq, tag, secondary header, and data.
 
@@ -306,7 +306,12 @@ namespace stream {
     }
 
     // encrypted control_header_v2 and payload data follow
-  } *control_encrypted_p;  ///< Alias for control encrypted p.
+  };
+
+  /**
+   * @brief Pointer to a packed encrypted control-channel envelope.
+   */
+  using control_encrypted_p = control_encrypted_t *;
 
   /**
    * @brief Packed RTP and FEC headers for an audio recovery packet.
@@ -1687,9 +1692,9 @@ namespace stream {
 
         auto blockIndex = 0;
         std::for_each(fec_blocks_begin, fec_blocks_end, [&](std::string_view &current_payload) {
-          auto packets = (current_payload.size() + (blocksize - 1)) / blocksize;
+          auto payload_packets = (current_payload.size() + (blocksize - 1)) / blocksize;
 
-          for (int x = 0; x < packets; ++x) {
+          for (int x = 0; x < payload_packets; ++x) {
             auto *inspect = (video_packet_raw_t *) &current_payload[x * blocksize];
 
             inspect->packet.frameIndex = (uint32_t) packet->frame_index();
@@ -1703,7 +1708,7 @@ namespace stream {
             if (x == 0) {
               inspect->packet.flags |= FLAG_SOF;
             }
-            if (x == packets - 1) {
+            if (x == payload_packets - 1) {
               inspect->packet.flags |= FLAG_EOF;
             }
           }
@@ -1939,7 +1944,7 @@ namespace stream {
             fec_packet.rtp.sequenceNumber = util::endian::big<std::uint16_t>(sequenceNumber + x + 1);
             fec_packet.fecHeader.fecShardIndex = x;
 
-            auto send_info = platf::send_info_t {
+            auto fec_send_info = platf::send_info_t {
               (const char *) &fec_packet,
               sizeof(fec_packet),
               (const char *) shards_p[RTPA_DATA_SHARDS + x],
@@ -1949,7 +1954,7 @@ namespace stream {
               session->audio.peer.port(),
               session->localAddress,
             };
-            platf::send(send_info);
+            platf::send(fec_send_info);
             BOOST_LOG(verbose) << "Audio FEC ["sv << (sequenceNumber & ~(RTPA_DATA_SHARDS - 1)) << ' ' << x << "] ::  send..."sv;
           }
         }
