@@ -415,17 +415,19 @@ namespace audio {
 #ifdef SUNSHINE_HAS_OPTIONAL_FFMPEG_AUDIO
       const auto codec_id = config.use_eac3 ? AV_CODEC_ID_EAC3 : AV_CODEC_ID_AC3;
       const auto codec_name = config.use_eac3 ? "E-AC-3"sv : "AC-3"sv;
+      const auto bitrate_kbps = dolby_bitrate_kbps(config.use_eac3, config.high_quality_dolby, config.channels);
       ffmpeg_audio_encoder_t encoder;
-      if (!encoder.initialize(codec_id, 320000, config.channels)) {
+      if (bitrate_kbps <= 0 || !encoder.initialize(codec_id, static_cast<std::int64_t>(bitrate_kbps) * 1000, config.channels)) {
         BOOST_LOG(error) << "Couldn't initialize the optional FFmpeg "sv << codec_name << " encoder"sv;
         packets->stop();
         return;
       }
 
       BOOST_LOG(info) << codec_name << " initialized: "sv << config.channels
-                      << " channels, 48 kHz, 320 kbit/s"sv;
+                      << " channels, 48 kHz, "sv << bitrate_kbps << " kbit/s"sv;
       while (auto sample = samples->pop()) {
-        buffer_t packet {1400};
+        // High-quality 448 kbit/s frames can exceed the old 1400-byte buffer.
+        buffer_t packet {2048};
         const auto bytes = encoder.encode(*sample, packet);
         if (bytes < 0) {
           BOOST_LOG(error) << "Couldn't encode "sv << codec_name << " audio frame"sv;
@@ -619,6 +621,19 @@ namespace audio {
 #else
     return false;
 #endif
+  }
+
+  int dolby_bitrate_kbps(bool eac3, bool high_quality, int channels) {
+    if (channels == 2) {
+      return high_quality ? 192 : 96;
+    }
+    if (channels == 6) {
+      if (!high_quality) {
+        return 256;
+      }
+      return eac3 ? 384 : 448;
+    }
+    return 0;
   }
 
   bool is_audio_ctx_sink_available(const audio_ctx_t &ctx) {

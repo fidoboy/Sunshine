@@ -74,11 +74,19 @@ const config = ref(props.config)
       <label for="audio_format" class="form-label">{{ $t('config.audio_format') }}</label>
       <select id="audio_format" class="form-select" v-model="config.audio_format" :disabled="!ac3Available && !eac3Available">
         <option value="opus">Opus (default)</option>
-        <option value="ac3" :disabled="!ac3Available">AC-3 (Dolby Digital, 320 kbit/s)</option>
-        <option value="eac3" :disabled="!eac3Available">E-AC-3 (Dolby Digital Plus, 320 kbit/s)</option>
+        <option value="ac3" :disabled="!ac3Available">AC-3 (Dolby Digital)</option>
+        <option value="eac3" :disabled="!eac3Available">E-AC-3 (Dolby Digital Plus)</option>
       </select>
       <div v-if="ac3Available || eac3Available" class="form-text">{{ $t('config.audio_format_fallback_desc') }}</div>
       <div v-else class="form-text">{{ $t('config.audio_format_unavailable_desc') }}</div>
+      <Checkbox v-if="ac3Available || eac3Available"
+                class="mt-3"
+                id="high_quality_audio"
+                locale-prefix="config"
+                v-model="config.high_quality_audio"
+                :disabled="config.audio_format === 'opus'"
+                default="false"
+      ></Checkbox>
     </div>
 
     <!-- Disable Audio -->

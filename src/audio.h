@@ -82,6 +82,7 @@ namespace audio {
 
     bool use_ac3 {false};  ///< Encode audio as AC-3 instead of Opus for this streaming session.
     bool use_eac3 {false};  ///< Encode audio as E-AC-3 instead of Opus for this streaming session.
+    bool high_quality_dolby {false};  ///< Higher bitrate for Dolby only; ignored for Opus.
   };
 
   /**
@@ -159,4 +160,7 @@ namespace audio {
    * @return True when the required FFmpeg DLLs and E-AC-3 encoder are available.
    */
   bool eac3_available();
+
+  /** Select channel-aware Dolby bitrate in kbit/s; returns 0 for unsupported layouts. */
+  int dolby_bitrate_kbps(bool eac3, bool high_quality, int channels);
 }  // namespace audio

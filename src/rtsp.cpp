@@ -1259,8 +1259,11 @@ namespace rtsp_stream {
       config.audio.packetDuration = 32;
       config.audio.flags[audio::config_t::HIGH_QUALITY] = true;
       config.audio.flags[audio::config_t::CUSTOM_SURROUND_PARAMS] = false;
+      config.audio.high_quality_dolby = config::audio.high_quality_audio;
+      const auto bitrate_kbps = audio::dolby_bitrate_kbps(
+        config.audio.use_eac3, config.audio.high_quality_dolby, config.audio.channels);
       BOOST_LOG(info) << "Using "sv << codec_name << " audio: "sv << config.audio.channels
-                      << " channels, 48 kHz, 320 kbit/s"sv;
+                      << " channels, 48 kHz, "sv << bitrate_kbps << " kbit/s"sv;
     }
 
     // When using stereo audio, the audio quality is (strangely) indicated by whether the Host field
@@ -1320,8 +1323,10 @@ namespace rtsp_stream {
       }
 
       // Adjust the bitrate to account for audio traffic bandwidth usage (capped at 20% reduction).
-      // The bitrate per channel is 256 Kbps for high quality mode and 96 Kbps for normal quality.
-      auto audioBitrateAdjustment = (config.audio.use_ac3 || config.audio.use_eac3) ? 320 : (config.audio.flags[audio::config_t::HIGH_QUALITY] ? 256 : 96) * config.audio.channels;
+      // Dolby uses its selected channel-aware bitrate; keep the Opus calculation unchanged.
+      auto audioBitrateAdjustment = (config.audio.use_ac3 || config.audio.use_eac3)
+        ? audio::dolby_bitrate_kbps(config.audio.use_eac3, config.audio.high_quality_dolby, config.audio.channels)
+        : (config.audio.flags[audio::config_t::HIGH_QUALITY] ? 256 : 96) * config.audio.channels;
       configuredBitrateKbps -= std::min((std::int64_t) audioBitrateAdjustment, configuredBitrateKbps / 5);
 
       // Reduce it by another 500Kbps to account for A/V packet overhead and control data
