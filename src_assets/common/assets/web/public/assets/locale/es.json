@@ -484,8 +484,8 @@
     "wan_encryption_mode_2": "Requerido para todos los clientes",
     "wan_encryption_mode_desc": "Esto determina cuándo se utilizará el cifrado al transmitir a través de Internet. El cifrado puede reducir el rendimiento de la transmisión, especialmente en hosts y clientes menos poderosos.",
     "audio_format": "Formato de audio del stream",
-    "audio_format_fallback_desc": "Si el cliente no admite el passthrough AC-3, Sunshine utilizará automáticamente Opus como alternativa.",
-    "audio_format_unavailable_desc": "La opción está deshabilitada porque no se han encontrado las DLL de FFmpeg compatibles. Copia las DLL necesarias en la subcarpeta «ffmpeg» del directorio de instalación de Sunshine y reinicia el servicio de Sunshine para habilitarla. Mientras tanto, el audio permanecerá en Opus."
+    "audio_format_fallback_desc": "Si el cliente no acepta el formato de audio Dolby seleccionado, Sunshine utilizará automáticamente Opus como alternativa.",
+    "audio_format_unavailable_desc": "AC-3 y E-AC-3 no están disponibles porque no se han encontrado DLL de FFmpeg compatibles. Copia las DLL necesarias en la subcarpeta «ffmpeg» del directorio de instalación de Sunshine y reinicia el servicio de Sunshine. Mientras tanto, se utilizará Opus."
   },
   "index": {
     "permissions_missing_title": "Sunshine necesita permisos",

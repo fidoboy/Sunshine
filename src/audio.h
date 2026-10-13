@@ -81,6 +81,7 @@ namespace audio {
     std::bitset<MAX_FLAGS> flags;  ///< Enabled audio feature flags.
 
     bool use_ac3 {false};  ///< Encode audio as AC-3 instead of Opus for this streaming session.
+    bool use_eac3 {false};  ///< Encode audio as E-AC-3 instead of Opus for this streaming session.
   };
 
   /**
@@ -152,4 +153,10 @@ namespace audio {
    * @return True when the required FFmpeg DLLs and AC-3 encoder are available.
    */
   bool ac3_available();
+
+  /**
+   * @brief Check whether a compatible optional FFmpeg E-AC-3 encoder is available.
+   * @return True when the required FFmpeg DLLs and E-AC-3 encoder are available.
+   */
+  bool eac3_available();
 }  // namespace audio

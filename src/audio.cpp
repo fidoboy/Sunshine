@@ -10,7 +10,7 @@
 #include <mutex>
 #include <thread>
 
-// Optional runtime-loaded FFmpeg AC-3 backend. Headers are a build-time dependency only;
+// Optional runtime-loaded FFmpeg Dolby audio backend. Headers are a build-time dependency only;
 // no FFmpeg import library is linked and no FFmpeg DLL is bundled with Sunshine.
 #if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
   #ifndef NOMINMAX
@@ -22,7 +22,7 @@
   #include <libavutil/channel_layout.h>
   #include <libavutil/frame.h>
   #include <libavutil/version.h>
-  #define SUNSHINE_HAS_OPTIONAL_AC3 1
+  #define SUNSHINE_HAS_OPTIONAL_FFMPEG_AUDIO 1
 #endif
 
 // lib includes
@@ -119,7 +119,7 @@ namespace audio {
     },
   }};
 
-#ifdef SUNSHINE_HAS_OPTIONAL_AC3
+#ifdef SUNSHINE_HAS_OPTIONAL_FFMPEG_AUDIO
   template<typename Function>
   bool load_ffmpeg_symbol(HMODULE module, Function &function, const char *name) {
     function = reinterpret_cast<Function>(GetProcAddress(module, name));
@@ -127,14 +127,14 @@ namespace audio {
   }
 
   /**
-   * @brief Runtime-loaded FFmpeg API used only by the optional AC-3 encoder.
+   * @brief Runtime-loaded FFmpeg API used by the optional AC-3 and E-AC-3 encoders.
    *
    * The runtime DLL major versions must match the headers used for this build. Keeping all
    * calls behind function pointers means Sunshine still starts normally when the DLLs are absent.
    */
-  class ffmpeg_ac3_api_t {
+  class ffmpeg_audio_api_t {
   public:
-    ~ffmpeg_ac3_api_t() {
+    ~ffmpeg_audio_api_t() {
       if (avcodec_module_) {
         FreeLibrary(avcodec_module_);
       }
@@ -143,11 +143,15 @@ namespace audio {
       }
     }
 
-    bool available() {
+    bool libraries_available() {
       std::call_once(load_once_, [this]() {
         load();
       });
       return ready_;
+    }
+
+    bool encoder_available(AVCodecID codec_id) {
+      return libraries_available() && find_encoder(codec_id) != nullptr;
     }
 
     decltype(&avutil_version) util_version {};
@@ -226,7 +230,7 @@ namespace audio {
       const auto versions_match = symbols_loaded &&
         (util_version() >> 16) == LIBAVUTIL_VERSION_MAJOR &&
         (codec_version() >> 16) == LIBAVCODEC_VERSION_MAJOR &&
-        find_encoder(AV_CODEC_ID_AC3) != nullptr;
+        (find_encoder(AV_CODEC_ID_AC3) != nullptr || find_encoder(AV_CODEC_ID_EAC3) != nullptr);
 
       if (!versions_match) {
         FreeLibrary(avcodec_module);
@@ -257,13 +261,13 @@ namespace audio {
       for (const auto &directory : directories) {
         if (load_directory(directory)) {
           ready_ = true;
-          BOOST_LOG(info) << "Optional FFmpeg AC-3 encoder is available"sv;
+          BOOST_LOG(info) << "Optional FFmpeg Dolby audio encoder API is available"sv;
           return;
         }
       }
 
       clear_symbols();
-      BOOST_LOG(debug) << "Optional FFmpeg AC-3 encoder not found; continuing with Opus"sv;
+      BOOST_LOG(debug) << "Compatible FFmpeg Dolby audio encoders not found; continuing with Opus"sv;
     }
 
     std::once_flag load_once_;
@@ -272,17 +276,17 @@ namespace audio {
     bool ready_ {false};
   };
 
-  ffmpeg_ac3_api_t &ffmpeg_ac3_api() {
-    static ffmpeg_ac3_api_t api;
+  ffmpeg_audio_api_t &ffmpeg_audio_api() {
+    static ffmpeg_audio_api_t api;
     return api;
   }
 
   /**
-   * @brief Encode one interleaved 5.1 float PCM frame as one AC-3 access unit.
+   * @brief Encode one interleaved stereo or 5.1 float PCM frame as an AC-3-family access unit.
    */
-  class ac3_encoder_t {
+  class ffmpeg_audio_encoder_t {
   public:
-    ~ac3_encoder_t() {
+    ~ffmpeg_audio_encoder_t() {
       if (packet_) {
         api_.free_packet(&packet_);
       }
@@ -294,12 +298,12 @@ namespace audio {
       }
     }
 
-    bool initialize() {
-      if (!api_.available()) {
+    bool initialize(AVCodecID codec_id, std::int64_t bit_rate, int channels) {
+      if (!api_.libraries_available() || (channels != 2 && channels != 6)) {
         return false;
       }
 
-      const auto *codec = api_.find_encoder(AV_CODEC_ID_AC3);
+      const auto *codec = api_.find_encoder(codec_id);
       if (!codec) {
         return false;
       }
@@ -309,18 +313,20 @@ namespace audio {
         return false;
       }
 
-      context_->bit_rate = 320000;
+      context_->bit_rate = bit_rate;
       context_->sample_rate = SAMPLE_RATE;
       context_->sample_fmt = AV_SAMPLE_FMT_FLTP;
       context_->time_base = AVRational {1, SAMPLE_RATE};
       context_->thread_count = 1;
+      channels_ = channels;
 
-      if (api_.channel_layout_from_mask(&context_->ch_layout, AV_CH_LAYOUT_5POINT1_BACK) < 0 ||
+      const auto channel_layout = channels == 2 ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_5POINT1_BACK;
+      if (api_.channel_layout_from_mask(&context_->ch_layout, channel_layout) < 0 ||
           api_.open_encoder(context_, codec, nullptr) < 0) {
         return false;
       }
 
-      // AC-3 uses 1536 samples per frame, which is exactly 32 ms at 48 kHz.
+      // AC-3 and E-AC-3 use 1536 samples per frame here (32 ms at 48 kHz).
       if (context_->frame_size != 1536) {
         return false;
       }
@@ -343,8 +349,7 @@ namespace audio {
     }
 
     int encode(const std::vector<float> &interleaved, buffer_t &output) {
-      constexpr int CHANNELS = 6;
-      if (!frame_ || interleaved.size() != static_cast<std::size_t>(frame_->nb_samples * CHANNELS)) {
+      if (!frame_ || interleaved.size() != static_cast<std::size_t>(frame_->nb_samples * channels_)) {
         return -1;
       }
 
@@ -352,10 +357,10 @@ namespace audio {
         return -1;
       }
 
-      for (int channel = 0; channel < CHANNELS; ++channel) {
+      for (int channel = 0; channel < channels_; ++channel) {
         auto *destination = reinterpret_cast<float *>(frame_->extended_data[channel]);
         for (int sample = 0; sample < frame_->nb_samples; ++sample) {
-          destination[sample] = interleaved[static_cast<std::size_t>(sample * CHANNELS + channel)];
+          destination[sample] = interleaved[static_cast<std::size_t>(sample * channels_ + channel)];
         }
       }
 
@@ -379,11 +384,12 @@ namespace audio {
     }
 
   private:
-    ffmpeg_ac3_api_t &api_ {ffmpeg_ac3_api()};
+    ffmpeg_audio_api_t &api_ {ffmpeg_audio_api()};
     AVCodecContext *context_ {nullptr};
     AVFrame *frame_ {nullptr};
     AVPacket *packet_ {nullptr};
     std::int64_t next_pts_ {0};
+    int channels_ {0};
   };
 #endif
 
@@ -405,21 +411,24 @@ namespace audio {
     platf::set_thread_name("audio::encode");
     platf::adjust_thread_priority(platf::thread_priority_e::high);
 
-    if (config.use_ac3) {
-#ifdef SUNSHINE_HAS_OPTIONAL_AC3
-      ac3_encoder_t ac3;
-      if (!ac3.initialize()) {
-        BOOST_LOG(error) << "Couldn't initialize the optional FFmpeg AC-3 encoder"sv;
+    if (config.use_ac3 || config.use_eac3) {
+#ifdef SUNSHINE_HAS_OPTIONAL_FFMPEG_AUDIO
+      const auto codec_id = config.use_eac3 ? AV_CODEC_ID_EAC3 : AV_CODEC_ID_AC3;
+      const auto codec_name = config.use_eac3 ? "E-AC-3"sv : "AC-3"sv;
+      ffmpeg_audio_encoder_t encoder;
+      if (!encoder.initialize(codec_id, 320000, config.channels)) {
+        BOOST_LOG(error) << "Couldn't initialize the optional FFmpeg "sv << codec_name << " encoder"sv;
         packets->stop();
         return;
       }
 
-      BOOST_LOG(info) << "AC-3 initialized: 48 kHz, 5.1 channels, 320 kbps"sv;
+      BOOST_LOG(info) << codec_name << " initialized: "sv << config.channels
+                      << " channels, 48 kHz, 320 kbit/s"sv;
       while (auto sample = samples->pop()) {
         buffer_t packet {1400};
-        const auto bytes = ac3.encode(*sample, packet);
+        const auto bytes = encoder.encode(*sample, packet);
         if (bytes < 0) {
-          BOOST_LOG(error) << "Couldn't encode AC-3 audio frame"sv;
+          BOOST_LOG(error) << "Couldn't encode "sv << codec_name << " audio frame"sv;
           packets->stop();
           return;
         }
@@ -429,7 +438,7 @@ namespace audio {
       }
       return;
 #else
-      BOOST_LOG(error) << "AC-3 was requested, but this build does not support its optional FFmpeg backend"sv;
+      BOOST_LOG(error) << "Dolby audio was requested, but this build does not support its optional FFmpeg backend"sv;
       packets->stop();
       return;
 #endif
@@ -597,8 +606,16 @@ namespace audio {
   }
 
   bool ac3_available() {
-#ifdef SUNSHINE_HAS_OPTIONAL_AC3
-    return ffmpeg_ac3_api().available();
+#ifdef SUNSHINE_HAS_OPTIONAL_FFMPEG_AUDIO
+    return ffmpeg_audio_api().encoder_available(AV_CODEC_ID_AC3);
+#else
+    return false;
+#endif
+  }
+
+  bool eac3_available() {
+#ifdef SUNSHINE_HAS_OPTIONAL_FFMPEG_AUDIO
+    return ffmpeg_audio_api().encoder_available(AV_CODEC_ID_EAC3);
 #else
     return false;
 #endif
