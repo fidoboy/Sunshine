@@ -928,6 +928,13 @@ namespace rtsp_stream {
 
     std::stringstream ss;
 
+    // Offer AC-3 only when it is selected and the optional encoder is available.
+    // Older clients ignore this extension and will continue to use Opus.
+    session.ac3_audio_offered = config::audio.format == "ac3"sv && audio::ac3_available();
+    if (session.ac3_audio_offered) {
+      ss << "a=x-ss-audio-codec-offer:AC3" << std::endl;
+    }
+
     // Tell the client about our supported features
     ss << "a=x-ss-general.featureFlags:" << (uint32_t) platf::get_capabilities() << std::endl;
 
@@ -1215,12 +1222,21 @@ namespace rtsp_stream {
       return;
     }
 
-    // AC-3 is a fixed 5.1 stream with one 1536-sample frame every 32 ms.
-    // Override the client-requested Opus packet duration/layout for AC-3 sessions.
-    config.audio.use_ac3 = config::audio.format == "ac3"sv && audio::ac3_available();
-    if (config::audio.format == "ac3"sv && !config.audio.use_ac3) {
+    // AC-3 is selected only when this session was offered AC-3 and the client
+    // explicitly accepted it in its ANNOUNCE payload. No acceptance means Opus.
+    const auto ac3_accept = args.find("x-ss-audio-codec-accept"sv);
+    const bool client_accepted_ac3 = ac3_accept != args.end() && ac3_accept->second == "AC3";
+    const bool ac3_encoder_available = session.ac3_audio_offered && audio::ac3_available();
+    config.audio.use_ac3 = ac3_encoder_available && client_accepted_ac3;
+
+    if (config::audio.format == "ac3"sv && !session.ac3_audio_offered) {
       BOOST_LOG(warning) << "AC-3 was selected, but compatible FFmpeg DLLs are unavailable; using Opus"sv;
+    } else if (session.ac3_audio_offered && !client_accepted_ac3) {
+      BOOST_LOG(info) << "Client did not accept AC-3; falling back to Opus"sv;
+    } else if (session.ac3_audio_offered && client_accepted_ac3 && !ac3_encoder_available) {
+      BOOST_LOG(warning) << "AC-3 encoder is no longer available; falling back to Opus"sv;
     }
+
     if (config.audio.use_ac3) {
       config.audio.channels = 6;
       config.audio.packetDuration = 32;
@@ -1332,6 +1348,12 @@ namespace rtsp_stream {
       return;
     }
 
+    // Return the selected codec in a response header so the new client can verify
+    // the result without adding a response body that legacy RTSP clients may not expect.
+    OPTION_ITEM audio_codec_option {};
+    audio_codec_option.option = const_cast<char *>("X-SS-Audio-Codec");
+    audio_codec_option.content = const_cast<char *>(config.audio.use_ac3 ? "AC3" : "Opus");
+    option.next = &audio_codec_option;
     respond(sock, session, &option, 200, "OK", req->sequenceNumber, {});
   }
 
