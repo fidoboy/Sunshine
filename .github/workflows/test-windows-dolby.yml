@@ -1,4 +1,5 @@
 name: Test Windows build for Dolby audio PR
+run-name: Windows AMD64 test build
 
 on:
   push:
