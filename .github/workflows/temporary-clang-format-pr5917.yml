@@ -41,7 +41,7 @@ jobs:
       - name: Run the repository clang-format updater
         run: uv run --locked lb-update-clang-format
 
-      - name: Capture and summarize formatting changes
+      - name: Re-check and summarize formatting after the PR formatting commit
         if: always()
         shell: bash
         run: |
