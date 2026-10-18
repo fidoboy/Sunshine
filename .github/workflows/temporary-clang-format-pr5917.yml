@@ -17,8 +17,12 @@ jobs:
         with:
           ref: pr/dolby-ac3-eac3
 
-      - name: Initialize the Python tooling submodule
-        run: git submodule update --init --depth 1 -- third-party/lizardbyte-common
+      - name: Initialize submodules needed by the locked Python tooling
+        run: >-
+          git submodule update --init --depth 1 --
+          third-party/lizardbyte-common
+          third-party/glad
+          packaging/linux/flatpak/deps/flatpak-builder-tools
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
