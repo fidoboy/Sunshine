@@ -13,5 +13,5 @@ jobs:
     uses: ./.github/workflows/ci-windows.yml
     with:
       publish_release: 'false'
-      release_commit: e1554c3a28627a3161f6d5c99d396c6a55c96092
+      release_commit: f768af9ce72a5fb5b85239bf93a7fa594eb69cbe
       release_version: 0.0.0
