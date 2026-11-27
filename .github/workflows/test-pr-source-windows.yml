@@ -4,7 +4,7 @@ permissions: {}
 on:
   push:
     branches:
-      - test/dolby-ac3-eac3-windows-rebuild
+      - test/dolby-ac3-eac3-windows-rebuild-2
 
 concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
