@@ -1,0 +1,23 @@
+---
+name: Test PR source - Windows
+permissions: {}
+
+on:
+  push:
+    branches:
+      - test/dolby-ac3-eac3-windows-rebuild
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: Windows test build (pinned PR source)
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci-windows.yml
+    with:
+      publish_release: 'false'
+      release_commit: '6ff7b570d340df4c86b3a79fc2f97cbc42168ce0'
+      release_version: '0.0.0-test'
